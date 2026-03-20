@@ -15,6 +15,8 @@
         body { font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent; }
         .safe-bottom { padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
         ::-webkit-scrollbar { display: none; }
+        .animate-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="bg-slate-100 antialiased overflow-hidden">
@@ -24,11 +26,11 @@
         const { useState, useMemo, useEffect } = React;
 
         // =====================================
-        // 🛠️ 核心密碼自訂區
+        // 🛠️ 核心設定區
         // =====================================
         const ACCESS_KEY = "666888";         // 預設進入密碼
-        const ADMIN_PASSWORD = "admin999";   // 管理員專用密碼
-        const GAS_URL = "https://script.google.com/macros/s/AKfycby5AmcAwSnAOE-Khz9t2dCIzyHugcADSMKJYk4WQGbc3srurSMxIR8DcxNjd6tSchRy/exec";
+        const ADMIN_PASSWORD = "fjm-300300"; // 管理員專用密碼
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbwxevu6vFcL418-hEdLcVo9zsGGeNUFArv8Rmg2U7K1iigIwCpZFeCuT3LcS_h-7I4/exec";
         // =====================================
 
         const Icons = {
@@ -41,61 +43,85 @@
         };
 
         function App() {
-            // 從 LocalStorage 讀取免登入設定
-            const [globalSkip, setGlobalSkip] = useState(() => localStorage.getItem('fjm_skip_login') === 'true');
-            const [isAccess, setIsAccess] = useState(globalSkip || sessionStorage.getItem('fjm_access') === 'true');
+            const [isAccess, setIsAccess] = useState(false);
             const [isAdmin, setIsAdmin] = useState(sessionStorage.getItem('fjm_admin') === 'true');
+            const [skipLoginMode, setSkipLoginMode] = useState(false);
             
             const [activeTab, setActiveTab] = useState('query');
             const [data, setData] = useState([]);
-            const [loading, setLoading] = useState(false);
+            const [loading, setLoading] = useState(true);
             const [searchTerm, setSearchTerm] = useState('');
             const [passInput, setPassInput] = useState('');
             const [adminInput, setAdminInput] = useState('');
             const [copied, setCopied] = useState(null);
-            const [visiblePwds, setVisiblePwds] = useState({}); // 控制每張卡片的密碼顯示狀態
+            const [visiblePwds, setVisiblePwds] = useState({});
 
+            // 1. 初始化檢查全域免登狀態
+            useEffect(() => {
+                fetch(`${GAS_URL}?action=getConfig`)
+                    .then(r => r.json())
+                    .then(config => {
+                        const isSkip = config.skipLogin === true;
+                        setSkipLoginMode(isSkip);
+                        if (isSkip || sessionStorage.getItem('fjm_access') === 'true') {
+                            setIsAccess(true);
+                        }
+                        setLoading(false);
+                    })
+                    .catch(() => setLoading(false));
+            }, []);
+
+            // 2. 當權限開啟時抓取 Wi-Fi 清單
             useEffect(() => {
                 if (isAccess) {
-                    setLoading(true);
                     fetch(GAS_URL).then(r => r.json()).then(j => {
                         if (j.success) setData(j.data);
-                        setLoading(false);
                     });
                 }
             }, [isAccess]);
 
-            const handleAccess = () => {
+            const handleAccessVerify = () => {
                 if (passInput === ACCESS_KEY) {
                     setIsAccess(true);
                     sessionStorage.setItem('fjm_access', 'true');
                 } else {
-                    alert('密碼錯誤！');
+                    alert('進入密碼錯誤！');
                     setPassInput('');
                 }
             };
 
-            const toggleSkipLogin = () => {
-                const newState = !globalSkip;
-                setGlobalSkip(newState);
-                localStorage.setItem('fjm_skip_login', newState);
-            };
-
-            const togglePwd = (id) => {
-                setVisiblePwds(prev => ({ ...prev, [id]: !prev[id] }));
+            const toggleGlobalSkip = () => {
+                const nextMode = !skipLoginMode;
+                fetch(`${GAS_URL}?action=updateConfig&skipLogin=${nextMode}&pwd=${ADMIN_PASSWORD}`)
+                    .then(r => r.json())
+                    .then(res => {
+                        if (res.success) {
+                            setSkipLoginMode(nextMode);
+                            alert(`全域免登入已${nextMode ? '開啟' : '關閉'}`);
+                        } else {
+                            alert('儲存失敗：' + res.msg);
+                        }
+                    });
             };
 
             const filtered = data.filter(i => (i.c+i.s).toLowerCase().includes(searchTerm.toLowerCase()));
 
+            if (loading && !isAccess) {
+                return <div className="h-screen w-full flex items-center justify-center bg-slate-100 font-black text-slate-400 animate-pulse text-xl">FJM CLOUD 連線中...</div>;
+            }
+
             if (!isAccess) {
                 return (
-                    <div className="h-screen w-full flex items-center justify-center p-6 bg-slate-100">
-                        <div className="w-full max-w-sm bg-white rounded-[3rem] p-10 shadow-2xl flex flex-col items-center gap-8 animate-[fadeIn_0.5s_ease-out]">
-                            <div className="w-20 h-20 bg-indigo-600 text-white rounded-3xl flex items-center justify-center shadow-lg shadow-indigo-200"><Icons.Lock /></div>
-                            <h2 className="text-3xl font-black text-slate-800 tracking-tight text-center">FJM Cloud</h2>
-                            <input type="password" className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl text-center text-4xl font-black focus:border-indigo-500 focus:bg-white transition-all outline-none"
-                                value={passInput} onChange={e => setPassInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAccess()} placeholder="••••" />
-                            <button onClick={handleAccess} className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black text-xl active:scale-95 transition-all">驗證進入</button>
+                    <div className="h-screen w-full flex items-center justify-center p-6 bg-slate-100 animate-in">
+                        <div className="w-full max-w-sm bg-white rounded-[3.5rem] p-12 shadow-2xl flex flex-col items-center gap-10">
+                            <div className="w-24 h-24 bg-indigo-600 text-white rounded-[2.5rem] flex items-center justify-center shadow-xl shadow-indigo-100"><Icons.Lock /></div>
+                            <div className="text-center space-y-2">
+                                <h2 className="text-4xl font-black text-slate-800 tracking-tighter">FJM Wi-Fi</h2>
+                                <p className="text-slate-400 font-bold">請輸入存取密碼以繼續</p>
+                            </div>
+                            <input type="password" className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl text-center text-4xl font-black focus:border-indigo-500 transition-all outline-none"
+                                value={passInput} onChange={e => setPassInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAccessVerify()} placeholder="••••" />
+                            <button onClick={handleAccessVerify} className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black text-xl active:scale-95 transition-all shadow-xl shadow-slate-200">登入系統</button>
                         </div>
                     </div>
                 );
@@ -106,39 +132,39 @@
                     <div className="w-full sm:max-w-md bg-white h-full flex flex-col shadow-2xl relative">
                         
                         {/* Header */}
-                        <div className="px-6 pt-12 pb-6 border-b border-slate-100">
+                        <div className="px-6 pt-12 pb-6 border-b border-slate-50">
                             <div className="flex justify-between items-center mb-6">
                                 <h1 className="text-2xl font-black text-slate-800 tracking-tighter">FJM Wi-Fi</h1>
-                                <button onClick={() => {sessionStorage.clear(); location.reload();}} className="px-4 py-2 bg-slate-100 text-slate-500 text-xs font-black rounded-full active:bg-red-50 active:text-red-500">登出</button>
+                                <button onClick={() => {sessionStorage.clear(); location.reload();}} className="px-4 py-2 bg-slate-100 text-slate-500 text-[10px] font-black rounded-full uppercase tracking-widest">Logout</button>
                             </div>
                             {activeTab === 'query' && (
-                                <input type="text" placeholder="搜尋教室..." className="w-full px-6 py-4 bg-slate-100 rounded-2xl border-none font-bold outline-none focus:ring-2 ring-indigo-500/20 focus:bg-white transition-all"
+                                <input type="text" placeholder="搜尋教室..." className="w-full px-6 py-4 bg-slate-100 rounded-2xl border-none font-bold outline-none focus:ring-2 ring-indigo-500/10 focus:bg-white transition-all text-lg"
                                     value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                             )}
                         </div>
 
                         {/* Content */}
-                        <div className="flex-1 overflow-y-auto bg-slate-50/50">
+                        <div className="flex-1 overflow-y-auto bg-slate-50/30">
                             {activeTab === 'query' ? (
-                                <div className="p-4 space-y-3">
-                                    {loading ? <div className="text-center py-20 text-slate-300 font-black animate-pulse">載入中...</div> : 
-                                    filtered.map(i => (
-                                        <div key={i.s} className="p-5 bg-white rounded-3xl border border-slate-100 shadow-sm animate-[fadeIn_0.3s_ease-out]">
-                                            <div className="flex justify-between items-start mb-4">
+                                <div className="p-4 space-y-4">
+                                    {filtered.length === 0 && !loading && <div className="text-center py-20 text-slate-300 font-bold">找不到相關教室資料</div>}
+                                    {filtered.map(i => (
+                                        <div key={i.s} className="p-6 bg-white rounded-[2rem] border border-slate-100 shadow-sm animate-in">
+                                            <div className="flex justify-between items-start mb-5">
                                                 <div>
-                                                    <div className="text-indigo-600 font-black text-xl leading-tight">{i.c}</div>
-                                                    <div className="text-slate-400 font-mono font-bold text-xs mt-1">{i.s}</div>
+                                                    <div className="text-indigo-600 font-black text-2xl leading-none">{i.c}</div>
+                                                    <div className="text-slate-400 font-mono font-bold text-[10px] mt-2 tracking-wider">{i.s}</div>
                                                 </div>
                                                 <div className="flex gap-2">
-                                                    <button onClick={() => togglePwd(i.s)} className={`p-3 rounded-xl transition-all ${visiblePwds[i.s] ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100' : 'bg-slate-100 text-slate-400'}`}><Icons.Eye /></button>
+                                                    <button onClick={() => setVisiblePwds(p => ({...p, [i.s]: !p[i.s]}))} className={`p-4 rounded-2xl transition-all ${visiblePwds[i.s] ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-400'}`}><Icons.Eye /></button>
                                                     <button onClick={() => { navigator.clipboard.writeText(i.p.trim()); setCopied(i.s); setTimeout(() => setCopied(null), 2000); }}
-                                                        className={`p-3 rounded-xl transition-all ${copied === i.s ? 'bg-green-500 text-white shadow-md' : 'bg-slate-100 text-slate-600'}`}>
+                                                        className={`p-4 rounded-2xl transition-all ${copied === i.s ? 'bg-green-500 text-white shadow-lg' : 'bg-slate-50 text-slate-600'}`}>
                                                         {copied === i.s ? <Icons.Check /> : <Icons.Copy />}
                                                     </button>
                                                 </div>
                                             </div>
                                             {visiblePwds[i.s] && (
-                                                <div className="w-full py-3 px-4 bg-indigo-50 rounded-2xl border border-indigo-100 text-indigo-700 font-black text-center text-lg tracking-widest animate-[fadeIn_0.2s_ease-out]">
+                                                <div className="w-full py-4 bg-indigo-50 rounded-2xl border border-indigo-100 text-indigo-700 font-black text-center text-xl tracking-[0.2em] animate-in">
                                                     {i.p}
                                                 </div>
                                             )}
@@ -148,29 +174,33 @@
                             ) : (
                                 <div className="h-full p-8 flex flex-col">
                                     {!isAdmin ? (
-                                        <div className="my-auto space-y-8 animate-[fadeIn_0.4s_ease-out]">
-                                            <h3 className="text-3xl font-black text-slate-800 text-center">管理員認證</h3>
-                                            <input type="password" placeholder="輸入管理密碼" className="w-full p-6 bg-white border-2 border-slate-200 rounded-3xl text-center text-3xl font-black outline-none focus:border-indigo-600"
+                                        <div className="my-auto space-y-8 animate-in">
+                                            <div className="text-center space-y-2">
+                                                <h3 className="text-3xl font-black text-slate-800 tracking-tight">管理員認證</h3>
+                                                <p className="text-slate-400 font-bold">請輸入後端權限金鑰</p>
+                                            </div>
+                                            <input type="password" placeholder="••••••••" className="w-full p-6 bg-white border-2 border-slate-200 rounded-[2rem] text-center text-3xl font-black outline-none focus:border-indigo-600 transition-all"
                                                 value={adminInput} onChange={e => setAdminInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (adminInput === ADMIN_PASSWORD ? (setIsAdmin(true), sessionStorage.setItem('fjm_admin', 'true')) : alert('錯誤'))} />
-                                            <button onClick={() => adminInput === ADMIN_PASSWORD ? (setIsAdmin(true), sessionStorage.setItem('fjm_admin', 'true')) : alert('錯誤')} className="w-full py-5 bg-indigo-600 text-white rounded-3xl font-black text-xl">進入後台</button>
+                                            <button onClick={() => adminInput === ADMIN_PASSWORD ? (setIsAdmin(true), sessionStorage.setItem('fjm_admin', 'true')) : alert('錯誤')} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black text-xl shadow-lg shadow-indigo-100 active:scale-95 transition-all">進入後台系統</button>
                                         </div>
                                     ) : (
-                                        <div className="space-y-6 animate-[fadeIn_0.4s_ease-out]">
-                                            <h2 className="text-3xl font-black text-slate-800">後台控制中心</h2>
-                                            <div className="p-8 bg-white border-2 border-slate-100 rounded-[2.5rem] shadow-sm flex flex-col gap-6">
+                                        <div className="space-y-6 animate-in">
+                                            <h2 className="text-3xl font-black text-slate-800 tracking-tight">系統設定</h2>
+                                            <div className="p-8 bg-white border-2 border-slate-50 rounded-[2.5rem] shadow-sm space-y-8">
                                                 <div className="flex items-center justify-between">
                                                     <div>
-                                                        <div className="text-lg font-black text-slate-800">免密碼存取</div>
-                                                        <div className="text-sm text-slate-400 font-bold">開啟後，在此裝置打開網頁將不再詢問密碼</div>
+                                                        <div className="text-xl font-black text-slate-800 tracking-tight">全域免登入模式</div>
+                                                        <div className="text-sm text-slate-400 font-bold mt-1">開啟後所有人皆不需輸入密碼</div>
                                                     </div>
-                                                    <button onClick={toggleSkipLogin} className={`w-14 h-8 rounded-full relative transition-all ${globalSkip ? 'bg-green-500' : 'bg-slate-200'}`}>
-                                                        <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-sm transition-all ${globalSkip ? 'right-1' : 'left-1'}`}></div>
+                                                    <button onClick={toggleGlobalSkip} className={`w-16 h-9 rounded-full relative transition-all shadow-inner ${skipLoginMode ? 'bg-green-500' : 'bg-slate-200'}`}>
+                                                        <div className={`absolute top-1.5 w-6 h-6 bg-white rounded-full shadow-md transition-all ${skipLoginMode ? 'right-1.5' : 'left-1.5'}`}></div>
                                                     </button>
                                                 </div>
-                                                <div className="h-px bg-slate-100 w-full"></div>
-                                                <p className="text-slate-400 text-xs font-bold leading-relaxed">
-                                                    ※ 注意：此設定僅儲存在「目前瀏覽器」中。若清除快取或更換手機，需重新設定。
-                                                </p>
+                                                <div className="p-5 bg-amber-50 rounded-3xl border border-amber-100">
+                                                    <p className="text-amber-700 text-xs font-bold leading-relaxed">
+                                                        警告：此操作將會即時影響所有正在使用網頁的使用者權限。
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
                                     )}
@@ -178,12 +208,12 @@
                             )}
                         </div>
 
-                        {/* Tab Bar */}
-                        <div className="px-6 pt-4 safe-bottom bg-white border-t border-slate-100 flex gap-4">
-                            <button onClick={() => setActiveTab('query')} className={`flex-1 py-4 rounded-2xl flex items-center justify-center gap-2 transition-all ${activeTab === 'query' ? 'bg-indigo-600 text-white shadow-lg font-black' : 'text-slate-400 font-bold'}`}>
-                                <Icons.Search /> 查詢
+                        {/* Footer Tabs */}
+                        <div className="px-6 pt-4 pb-8 safe-bottom bg-white border-t border-slate-50 flex gap-4">
+                            <button onClick={() => setActiveTab('query')} className={`flex-1 py-4 rounded-2xl flex items-center justify-center gap-3 transition-all ${activeTab === 'query' ? 'bg-slate-900 text-white shadow-xl shadow-slate-200 font-black' : 'text-slate-400 font-bold hover:bg-slate-50'}`}>
+                                <Icons.Search /> 密碼庫
                             </button>
-                            <button onClick={() => setActiveTab('setup')} className={`flex-1 py-4 rounded-2xl flex items-center justify-center gap-2 transition-all ${activeTab === 'setup' ? 'bg-indigo-600 text-white shadow-lg font-black' : 'text-slate-400 font-bold'}`}>
+                            <button onClick={() => setActiveTab('setup')} className={`flex-1 py-4 rounded-2xl flex items-center justify-center gap-3 transition-all ${activeTab === 'setup' ? 'bg-slate-900 text-white shadow-xl shadow-slate-200 font-black' : 'text-slate-400 font-bold hover:bg-slate-50'}`}>
                                 <Icons.Settings /> 管理
                             </button>
                         </div>

@@ -2,142 +2,170 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>FJM Cloud Admin</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FJM Wi-Fi 管理系統</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;900&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f1f5f9; -webkit-tap-highlight-color: transparent; }
-        .animate-pop { animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-        .rounded-extra { border-radius: 3.5rem; }
-        @keyframes pop { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        .btn-active:active { transform: scale(0.92); transition: 0.1s; }
+        /* 1. 星空背景與基礎樣式 */
+        body {
+            margin: 0;
+            padding: 0;
+            background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* 2. 登入畫面 (霓虹燈邊框) */
+        #login-screen {
+            margin-top: 15vh;
+            padding: 30px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #00f3ff;
+            box-shadow: 0 0 15px #00f3ff;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        input {
+            padding: 10px;
+            border-radius: 5px;
+            border: none;
+            outline: none;
+            width: 200px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #00f3ff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            box-shadow: 0 0 20px #00f3ff;
+            transform: scale(1.05);
+        }
+
+        /* 3. Wi-Fi 卡片容器 */
+        #wifi-container {
+            display: none;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            padding: 40px;
+            width: 100%;
+        }
+
+        /* 4. 霓虹燈卡片設計 */
+        .wifi-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #ff00ff;
+            box-shadow: 0 0 10px #ff00ff;
+            border-radius: 15px;
+            padding: 20px;
+            width: 280px;
+            text-align: center;
+            backdrop-filter: blur(5px);
+            transition: 0.4s;
+        }
+
+        .wifi-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 0 25px #ff00ff;
+        }
+
+        .wifi-card h2 {
+            color: #00f3ff;
+            margin-top: 0;
+        }
+
+        .qr-code {
+            margin: 15px 0;
+            border: 5px solid white;
+            border-radius: 10px;
+        }
+
+        .copy-btn {
+            background: #ff00ff;
+            color: white;
+            width: 100%;
+            margin-top: 10px;
+        }
     </style>
 </head>
-<body class="antialiased overflow-hidden">
-    <div id="root"></div>
-    <script type="text/babel">
-        const { useState, useEffect, useCallback } = React;
-        const ADMIN_PASSWORD = "fjm-300300"; 
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbxzbEuLi5XQzzJW3sCU82guqVWuf5hy_Pt_ehKurftSqK3LkLoJAM7a1bfw-bxTt9MH/exec";
+<body>
 
-        function App() {
-            const [isAccess, setIsAccess] = useState(false);
-            const [isAdmin, setIsAdmin] = useState(false);
-            const [activeTab, setActiveTab] = useState('query');
-            const [config, setConfig] = useState({ skipLogin: false, accessKey: "666888" });
-            const [data, setData] = useState([]);
-            const [loading, setLoading] = useState(true);
-            const [passInput, setPassInput] = useState('');
-            const [adminInput, setAdminInput] = useState('');
-            const [newAccessKey, setNewAccessKey] = useState('');
-            const [updating, setUpdating] = useState(false);
+    <div id="login-screen">
+        <h1>🔐 進入管理系統</h1>
+        <p>請輸入管理密碼以查看 Wi-Fi 清單</p>
+        <input type="password" id="pwInput" placeholder="請輸入密碼...">
+        <button onclick="verifyAndLoad()">送出</button>
+    </div>
 
-            const fetchGAS = useCallback(async (p = "") => {
-                try {
-                    const r = await fetch(`${GAS_URL}${p}`, { method: 'GET', redirect: 'follow' });
-                    return await r.json();
-                } catch (e) { return null; }
-            }, []);
+    <div id="wifi-container"></div>
 
-            useEffect(() => {
-                fetchGAS("?action=getConfig").then(res => {
-                    if (res) {
-                        setConfig(res);
-                        setNewAccessKey(res.accessKey);
-                        if (res.skipLogin || sessionStorage.getItem('fjm_ok') === 'true') setIsAccess(true);
-                    }
-                    setLoading(false);
-                });
-            }, [fetchGAS]);
+    <script>
+        // 請替換為你的 GAS 網址
+        const GAS_URL = "你的_GAS_部署網址";
 
-            useEffect(() => {
-                if (isAccess) fetchGAS().then(res => { if (res?.success) setData(res.data); });
-            }, [isAccess, fetchGAS]);
+        async function verifyAndLoad() {
+            const pw = document.getElementById('pwInput').value;
+            if (!pw) return alert("請輸入密碼！");
 
-            const updateConfig = async (params) => {
-                setUpdating(true);
-                const res = await fetchGAS(`?action=updateConfig&pwd=${ADMIN_PASSWORD}${params}`);
-                if (res?.success) alert("同步成功");
-                else alert("失敗：" + res?.msg);
-                setUpdating(false);
-            };
+            try {
+                // 串接 GAS API 並傳入密碼
+                const response = await fetch(`${GAS_URL}?pw=${encodeURIComponent(pw)}`);
+                const result = await response.json();
 
-            if (loading) return null;
-
-            if (!isAccess) {
-                return (
-                    <div className="h-screen flex items-center justify-center p-8 animate-pop">
-                        <div className="w-full max-w-sm bg-white rounded-extra p-12 shadow-2xl flex flex-col items-center gap-10">
-                            <h2 className="text-4xl font-black text-slate-800">FJM 認證</h2>
-                            <input type="password" className="w-full p-8 bg-slate-50 rounded-full text-center text-4xl font-black outline-none focus:ring-4 ring-indigo-500/10"
-                                value={passInput} onChange={e => setPassInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (passInput === config.accessKey ? (setIsAccess(true), sessionStorage.setItem('fjm_ok', 'true')) : alert('密碼錯誤'))} placeholder="••••" />
-                            <button onClick={() => passInput === config.accessKey ? (setIsAccess(true), sessionStorage.setItem('fjm_ok', 'true')) : alert('密碼錯誤')} className="w-full py-6 bg-slate-900 text-white rounded-full font-black text-xl btn-active">進入系統</button>
-                        </div>
-                    </div>
-                );
+                if (result.success) {
+                    document.getElementById('login-screen').style.display = 'none';
+                    const container = document.getElementById('wifi-container');
+                    container.style.display = 'flex';
+                    
+                    renderCards(result.data);
+                } else {
+                    alert("密碼錯誤，請重新輸入！");
+                }
+            } catch (error) {
+                console.error("錯誤:", error);
+                alert("連線發生問題，請確認 GAS 部署設定。");
             }
-
-            return (
-                <div className="flex justify-center h-[100dvh]">
-                    <div className="w-full sm:max-w-md bg-white h-full flex flex-col shadow-2xl relative">
-                        <div className="px-10 pt-16 pb-8 border-b border-slate-50 flex justify-between items-center">
-                            <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">{activeTab === 'query' ? 'Wi-Fi' : 'Admin'}</h1>
-                            <button onClick={() => {sessionStorage.clear(); location.reload();}} className="text-slate-300 font-bold text-xs uppercase">Logout</button>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto bg-slate-50/50 p-6">
-                            {activeTab === 'query' ? (
-                                <div className="space-y-4">
-                                    {data.map(i => (
-                                        <div key={i.s} className="p-8 bg-white rounded-extra border border-slate-100 shadow-sm animate-pop flex justify-between items-center">
-                                            <div><div className="text-indigo-600 font-black text-3xl">{i.c}</div><div className="text-slate-400 text-xs font-bold uppercase">{i.s}</div></div>
-                                            <button onClick={() => alert(`密碼是: ${i.p}`)} className="px-6 py-4 bg-slate-100 rounded-full font-black text-xs btn-active text-slate-500 tracking-widest">查看</button>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="p-4 space-y-8 animate-pop">
-                                    {!isAdmin ? (
-                                        <div className="text-center space-y-8 mt-20">
-                                            <h3 className="text-2xl font-black">後台驗證</h3>
-                                            <input type="password" placeholder="管理員密碼" className="w-full p-6 bg-white rounded-full text-center text-3xl font-black outline-none shadow-sm"
-                                                value={adminInput} onChange={e => setAdminInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (adminInput === ADMIN_PASSWORD ? setIsAdmin(true) : alert('密碼錯誤'))} />
-                                            <button onClick={() => adminInput === ADMIN_PASSWORD ? setIsAdmin(true) : alert('密碼錯誤')} className="w-full py-5 bg-indigo-600 text-white rounded-full font-black btn-active">認證</button>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-6">
-                                            <div className="p-10 bg-white rounded-extra shadow-sm border border-slate-100 space-y-6">
-                                                <h4 className="font-black text-slate-800">修改進入密碼</h4>
-                                                <input type="text" value={newAccessKey} onChange={e => setNewAccessKey(e.target.value)} className="w-full p-5 bg-slate-50 rounded-full text-center font-black text-2xl outline-none ring-indigo-500/10 focus:ring-4" />
-                                                <button onClick={() => updateConfig(`&accessKey=${newAccessKey}`)} className="w-full py-4 bg-slate-900 text-white rounded-full font-black btn-active">儲存新密碼</button>
-                                            </div>
-                                            <div className="p-10 bg-white rounded-extra shadow-sm border border-slate-100 flex justify-between items-center">
-                                                <span className="font-black">全域免登入模式</span>
-                                                <button onClick={() => { const target = !config.skipLogin; setConfig({...config, skipLogin: target}); updateConfig(`&skipLogin=${target}`); }} 
-                                                    className={`w-16 h-8 rounded-full transition-all relative ${config.skipLogin ? 'bg-green-500' : 'bg-slate-200'}`}>
-                                                    <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${config.skipLogin ? 'right-1' : 'left-1'}`}></div>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="px-12 pt-6 pb-12 bg-white border-t border-slate-50 flex gap-8">
-                            <button onClick={() => setActiveTab('query')} className={`flex-1 py-6 rounded-full font-black btn-active ${activeTab === 'query' ? 'bg-slate-900 text-white shadow-xl scale-105' : 'text-slate-400'}`}>密碼庫</button>
-                            <button onClick={() => setActiveTab('setup')} className={`flex-1 py-6 rounded-full font-black btn-active ${activeTab === 'setup' ? 'bg-slate-900 text-white shadow-xl scale-105' : 'text-slate-400'}`}>管理員</button>
-                        </div>
-                    </div>
-                </div>
-            );
         }
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+
+        function renderCards(data) {
+            const container = document.getElementById('wifi-container');
+            container.innerHTML = '';
+
+            data.forEach(i => {
+                // 生成 QR Code (WIFI:S:帳號;T:WPA;P:密碼;;)
+                const qrUrl = `https://chart.googleapis.com/chart?cht=qr&chs=150x150&chl=WIFI:S:${i.s};T:WPA;P:${i.p};;`;
+
+                const card = document.createElement('div');
+                card.className = 'wifi-card';
+                card.innerHTML = `
+                    <h2>${i.c}</h2>
+                    <p style="font-size: 0.9em; color: #ccc;">SSID: ${i.s}</p>
+                    <img src="${qrUrl}" alt="QR Code" class="qr-code">
+                    <button class="copy-btn" onclick="copyToClipboard('${i.p}')">📋 複製密碼</button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function copyToClipboard(text) {
+            // 自動移除空白 (保留你原本貼心的功能)
+            const cleanText = text.replace(/\s/g, '');
+            navigator.clipboard.writeText(cleanText).then(() => {
+                alert("密碼已複製！");
+            });
+        }
     </script>
 </body>
 </html>

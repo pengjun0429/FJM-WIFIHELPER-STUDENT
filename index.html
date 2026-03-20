@@ -12,7 +12,7 @@
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;900&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f1f5f9; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; }
         .safe-bottom { padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px)); }
         ::-webkit-scrollbar { display: none; }
         .animate-pop { animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
@@ -26,9 +26,11 @@
     <script type="text/babel">
         const { useState, useEffect, useCallback } = React;
 
-        const ACCESS_KEY = "666888";         
-        const ADMIN_PASSWORD = "fjm-300300"; 
+        // =====================================
+        const ACCESS_KEY = "666888";         // 進入網頁的密碼
+        const ADMIN_PASSWORD = "fjm-300300"; // 管理員功能密碼
         const GAS_URL = "https://script.google.com/macros/s/AKfycbwxevu6vFcL418-hEdLcVo9zsGGeNUFArv8Rmg2U7K1iigIwCpZFeCuT3LcS_h-7I4/exec";
+        // =====================================
 
         function App() {
             const [isAccess, setIsAccess] = useState(false);
@@ -44,23 +46,21 @@
             const [copied, setCopied] = useState(null);
             const [visiblePwds, setVisiblePwds] = useState({});
 
-            // 抓取資料的核心函式
-            const fetchData = useCallback(async (url) => {
+            // 向 GAS 抓取資料的通用函式
+            const fetchFromGAS = useCallback(async (params = "") => {
                 try {
-                    const response = await fetch(url, { method: 'GET', cache: 'no-store' });
+                    const response = await fetch(`${GAS_URL}${params}`, { method: 'GET', cache: 'no-store' });
                     return await response.json();
-                } catch (e) {
-                    console.error("Fetch Error:", e);
-                    return null;
-                }
+                } catch (e) { return null; }
             }, []);
 
-            // 初始化與免登入檢查
+            // 1. 初始化：對接 GAS 的 getConfig
             useEffect(() => {
                 const init = async () => {
-                    const config = await fetchData(`${GAS_URL}?action=getConfig`);
+                    const config = await fetchFromGAS("?action=getConfig");
                     if (config) {
                         setSkipLoginMode(config.skipLogin);
+                        // 如果雲端開啟免登，或本地 Session 已過期
                         if (config.skipLogin === true || sessionStorage.getItem('fjm_access') === 'true') {
                             setIsAccess(true);
                         }
@@ -68,35 +68,38 @@
                     setLoading(false);
                 };
                 init();
-            }, [fetchData]);
+            }, [fetchFromGAS]);
 
-            // 當取得存取權後，抓取 Wi-Fi 清單
+            // 2. 登入後抓取 Wi-Fi 清單 (對接 GAS 預設動作)
             useEffect(() => {
                 if (isAccess) {
-                    const getWifi = async () => {
-                        const res = await fetchData(GAS_URL);
+                    fetchFromGAS().then(res => {
                         if (res && res.success) setData(res.data);
-                    };
-                    getWifi();
+                    });
                 }
-            }, [isAccess, fetchData]);
+            }, [isAccess, fetchFromGAS]);
+
+            // 管理員功能：切換全域免登入 (對接 GAS 的 updateConfig)
+            const toggleGlobalSkip = async () => {
+                if (updating) return;
+                setUpdating(true);
+                const target = !skipLoginMode;
+                const res = await fetchFromGAS(`?action=updateConfig&skipLogin=${target}&pwd=${ADMIN_PASSWORD}`);
+                if (res && res.success) {
+                    setSkipLoginMode(target);
+                } else {
+                    alert(res?.msg || "同步失敗");
+                }
+                setUpdating(false);
+            };
 
             const handleLogin = () => {
                 if (passInput === ACCESS_KEY) {
                     setIsAccess(true);
                     sessionStorage.setItem('fjm_access', 'true');
                 } else {
-                    alert("密碼錯誤");
+                    alert("存取密碼錯誤");
                 }
-            };
-
-            const toggleSkipMode = async () => {
-                if (updating) return;
-                setUpdating(true);
-                const target = !skipLoginMode;
-                const res = await fetchData(`${GAS_URL}?action=updateConfig&skipLogin=${target}&pwd=${ADMIN_PASSWORD}`);
-                if (res && res.success) setSkipLoginMode(target);
-                setUpdating(false);
             };
 
             const filtered = data.filter(i => 
@@ -112,12 +115,12 @@
                             <div className="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg">
                                 <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                             </div>
-                            <h2 className="text-4xl font-black text-slate-800 tracking-tighter">存取認證</h2>
+                            <h2 className="text-4xl font-black text-slate-800 tracking-tighter">FJM 認證</h2>
                             <input type="password" 
                                 className="w-full p-8 bg-slate-50 border-none rounded-full text-center text-4xl font-black outline-none focus:ring-4 ring-indigo-500/10 placeholder:text-slate-200"
                                 value={passInput} onChange={e => setPassInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="••••" 
                             />
-                            <button onClick={handleLogin} className="w-full py-6 bg-slate-900 text-white rounded-full font-black text-xl btn-round shadow-lg">驗證進入</button>
+                            <button onClick={handleLogin} className="w-full py-6 bg-slate-900 text-white rounded-full font-black text-xl btn-round shadow-lg">進入系統</button>
                         </div>
                     </div>
                 );
@@ -129,8 +132,8 @@
                         
                         <div className="px-10 pt-16 pb-8 border-b border-slate-50">
                             <div className="flex justify-between items-center mb-8">
-                                <h1 className="text-3xl font-black text-slate-800 tracking-tighter">Wi-Fi 密碼庫</h1>
-                                <button onClick={() => {sessionStorage.clear(); location.reload();}} className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 font-black text-[10px] btn-round">OFF</button>
+                                <h1 className="text-3xl font-black text-slate-800 tracking-tighter text-indigo-600">FJM Cloud</h1>
+                                <button onClick={() => {sessionStorage.clear(); location.reload();}} className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 font-black text-[10px] btn-round tracking-tighter">OFF</button>
                             </div>
                             {activeTab === 'query' && (
                                 <input type="text" placeholder="搜尋教室..." 
@@ -143,12 +146,12 @@
                         <div className="flex-1 overflow-y-auto bg-slate-50/50">
                             {activeTab === 'query' ? (
                                 <div className="p-6 space-y-5">
-                                    {data.length === 0 && <div className="text-center py-20 text-slate-300 font-bold animate-pulse tracking-widest">資料同步中...</div>}
+                                    {data.length === 0 && <div className="text-center py-20 text-slate-300 font-bold animate-pulse">連線至 Google App...</div>}
                                     {filtered.map(i => (
                                         <div key={i.s} className="p-8 bg-white rounded-[3.5rem] border border-slate-100 shadow-sm animate-pop">
                                             <div className="flex justify-between items-center mb-6">
                                                 <div>
-                                                    <div className="text-indigo-600 font-black text-3xl tracking-tighter">{i.c}</div>
+                                                    <div className="text-slate-800 font-black text-3xl tracking-tighter">{i.c}</div>
                                                     <div className="text-slate-400 font-mono font-bold text-xs mt-1 tracking-widest uppercase">{i.s}</div>
                                                 </div>
                                                 <div className="flex gap-3">
@@ -167,22 +170,22 @@
                                 <div className="h-full p-12 flex flex-col">
                                     {!isAdmin ? (
                                         <div className="my-auto space-y-10 animate-pop text-center">
-                                            <h3 className="text-3xl font-black text-slate-800 tracking-tight">後台驗證</h3>
-                                            <input type="password" placeholder="••••••••" 
+                                            <h3 className="text-3xl font-black text-slate-800 tracking-tight text-center">後台認證</h3>
+                                            <input type="password" placeholder="管理員密碼" 
                                                 className="w-full p-8 bg-white border-none rounded-full text-center text-4xl font-black outline-none shadow-inner focus:ring-4 ring-indigo-600/10 transition-all"
                                                 value={adminInput} onChange={e => setAdminInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (adminInput === ADMIN_PASSWORD ? setIsAdmin(true) : alert("錯誤"))} 
                                             />
-                                            <button onClick={() => adminInput === ADMIN_PASSWORD ? setIsAdmin(true) : alert("錯誤")} className="w-full py-6 bg-indigo-600 text-white rounded-full font-black text-xl btn-round shadow-lg">確認權限</button>
+                                            <button onClick={() => adminInput === ADMIN_PASSWORD ? setIsAdmin(true) : alert("錯誤")} className="w-full py-6 bg-indigo-600 text-white rounded-full font-black text-xl btn-round shadow-lg">進入管理模式</button>
                                         </div>
                                     ) : (
                                         <div className="space-y-10 animate-pop">
-                                            <h2 className="text-3xl font-black text-slate-800 tracking-tight">系統設定</h2>
-                                            <div className="p-12 bg-white border border-slate-100 rounded-[4rem] shadow-sm flex flex-col items-center gap-10">
+                                            <h2 className="text-3xl font-black text-slate-800 tracking-tight">後台系統</h2>
+                                            <div className="p-12 bg-white border border-slate-100 rounded-[4.5rem] shadow-sm flex flex-col items-center gap-10">
                                                 <div className="text-center">
-                                                    <div className="text-2xl font-black text-slate-800">全域免登入</div>
-                                                    <p className="text-slate-400 font-bold text-sm mt-2">開啟後所有人可直接存取</p>
+                                                    <div className="text-2xl font-black text-slate-800">全域免登入開關</div>
+                                                    <p className="text-slate-400 font-bold text-sm mt-2">連動 Google App 設定</p>
                                                 </div>
-                                                <button onClick={toggleSkipMode} 
+                                                <button onClick={toggleGlobalSkip} 
                                                     className={`w-36 h-16 rounded-full relative transition-all duration-500 btn-round ${updating ? 'opacity-50' : ''} ${skipLoginMode ? 'bg-green-500 shadow-xl shadow-green-100' : 'bg-slate-200'}`}>
                                                     <div className={`absolute top-2 w-12 h-12 bg-white rounded-full shadow-lg transition-all duration-500 ${skipLoginMode ? 'right-2' : 'left-2'}`}>
                                                         {updating && <div className="w-full h-full border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin"></div>}

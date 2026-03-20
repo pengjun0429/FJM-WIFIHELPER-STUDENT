@@ -3,15 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FJM Wi-Fi 管理系統</title>
+    <title>Wi-Fi 密碼查詢系統</title>
     <style>
-        /* 1. 星空背景與基礎樣式 */
+        /* 星空背景特效 */
         body {
             margin: 0;
-            padding: 0;
-            background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
-            color: white;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #020b16;
+            color: #fff;
+            font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -19,151 +18,193 @@
             overflow-x: hidden;
         }
 
-        /* 2. 登入畫面 (霓虹燈邊框) */
-        #login-screen {
-            margin-top: 15vh;
-            padding: 30px;
-            background: rgba(0, 0, 0, 0.6);
-            border: 2px solid #00f3ff;
-            box-shadow: 0 0 15px #00f3ff;
-            border-radius: 15px;
+        /* 霓虹標題 */
+        .title {
+            font-size: 2.5em;
+            color: #00f3ff;
+            text-shadow: 0 0 10px #00f3ff, 0 0 20px #00f3ff;
+            margin: 40px 0;
+            letter-spacing: 5px;
+        }
+
+        /* 登入區塊 */
+        #login-container {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 40px;
+            border-radius: 20px;
+            border: 2px solid #ff00ff;
+            box-shadow: 0 0 20px #ff00ff;
             text-align: center;
+            margin-top: 10vh;
+            backdrop-filter: blur(10px);
         }
 
         input {
-            padding: 10px;
+            background: transparent;
+            border: 1px solid #00f3ff;
+            color: #fff;
+            padding: 12px;
             border-radius: 5px;
-            border: none;
             outline: none;
-            width: 200px;
+            width: 220px;
+            font-size: 1.1em;
+            text-align: center;
         }
 
-        button {
-            padding: 10px 20px;
+        .login-btn {
             background: #00f3ff;
+            color: #000;
             border: none;
+            padding: 12px 25px;
             border-radius: 5px;
             cursor: pointer;
             font-weight: bold;
+            margin-top: 20px;
             transition: 0.3s;
         }
 
-        button:hover {
-            box-shadow: 0 0 20px #00f3ff;
+        .login-btn:hover {
+            box-shadow: 0 0 25px #00f3ff;
             transform: scale(1.05);
         }
 
-        /* 3. Wi-Fi 卡片容器 */
-        #wifi-container {
+        /* Wi-Fi 卡片展示區 */
+        #main-content {
             display: none;
             flex-wrap: wrap;
             justify-content: center;
-            gap: 20px;
-            padding: 40px;
+            gap: 25px;
+            padding: 20px;
             width: 100%;
+            max-width: 1200px;
         }
 
-        /* 4. 霓虹燈卡片設計 */
         .wifi-card {
             background: rgba(255, 255, 255, 0.05);
-            border: 1px solid #ff00ff;
-            box-shadow: 0 0 10px #ff00ff;
+            border: 1px solid #00f3ff;
             border-radius: 15px;
-            padding: 20px;
+            padding: 25px;
             width: 280px;
             text-align: center;
-            backdrop-filter: blur(5px);
             transition: 0.4s;
+            position: relative;
+            overflow: hidden;
         }
 
         .wifi-card:hover {
+            border-color: #ff00ff;
+            box-shadow: 0 0 20px #ff00ff;
             transform: translateY(-10px);
-            box-shadow: 0 0 25px #ff00ff;
         }
 
-        .wifi-card h2 {
+        .classroom-name {
+            font-size: 1.5em;
             color: #00f3ff;
-            margin-top: 0;
+            margin-bottom: 10px;
         }
 
         .qr-code {
-            margin: 15px 0;
-            border: 5px solid white;
+            background: #fff;
+            padding: 10px;
             border-radius: 10px;
+            margin: 15px 0;
+            width: 160px;
         }
 
-        .copy-btn {
-            background: #ff00ff;
+        .copy-button {
+            background: linear-gradient(45deg, #00f3ff, #ff00ff);
             color: white;
+            border: none;
             width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
             margin-top: 10px;
+        }
+
+        /* 載入動畫 */
+        #loader {
+            display: none;
+            color: #00f3ff;
+            margin-top: 20px;
         }
     </style>
 </head>
 <body>
 
-    <div id="login-screen">
-        <h1>🔐 進入管理系統</h1>
-        <p>請輸入管理密碼以查看 Wi-Fi 清單</p>
-        <input type="password" id="pwInput" placeholder="請輸入密碼...">
-        <button onclick="verifyAndLoad()">送出</button>
+    <h1 class="title">WIFI PASSWORDS</h1>
+
+    <div id="login-container">
+        <p style="margin-bottom: 20px; color: #ccc;">ACCESS REQUIRED</p>
+        <input type="password" id="pwInput" placeholder="請輸入管理密碼">
+        <br>
+        <button class="login-btn" onclick="checkAccess()">ENTER SYSTEM</button>
+        <div id="loader">正在同步衛星資料...</div>
     </div>
 
-    <div id="wifi-container"></div>
+    <div id="main-content"></div>
 
     <script>
-        // 請替換為你的 GAS 網址
-        const GAS_URL = "你的_GAS_部署網址";
+        // --- 核心設定 ---
+        const LOGIN_PASSWORD = "0001"; // 在這裡修改進入網頁的密碼
+        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw1NrppF8bpQSwM70ELil_6jgStTFmxTwMW9VZnPv2qiTki2CwwL_qx1BhDXl540CI7/exec"; 
 
-        async function verifyAndLoad() {
-            const pw = document.getElementById('pwInput').value;
-            if (!pw) return alert("請輸入密碼！");
-
-            try {
-                // 串接 GAS API 並傳入密碼
-                const response = await fetch(`${GAS_URL}?pw=${encodeURIComponent(pw)}`);
-                const result = await response.json();
-
-                if (result.success) {
-                    document.getElementById('login-screen').style.display = 'none';
-                    const container = document.getElementById('wifi-container');
-                    container.style.display = 'flex';
-                    
-                    renderCards(result.data);
-                } else {
-                    alert("密碼錯誤，請重新輸入！");
-                }
-            } catch (error) {
-                console.error("錯誤:", error);
-                alert("連線發生問題，請確認 GAS 部署設定。");
+        function checkAccess() {
+            const userIn = document.getElementById('pwInput').value;
+            if (userIn === LOGIN_PASSWORD) {
+                fetchWifiData();
+            } else {
+                alert("密碼錯誤，拒絕存取！");
             }
         }
 
-        function renderCards(data) {
-            const container = document.getElementById('wifi-container');
+        async function fetchWifiData() {
+            document.getElementById('loader').style.display = 'block';
+            
+            try {
+                const response = await fetch(GAS_WEB_APP_URL);
+                const json = await response.json();
+                
+                if (json.success) {
+                    showContent(json.data);
+                } else {
+                    alert("資料抓取失敗");
+                }
+            } catch (error) {
+                alert("連線到 GAS 發生錯誤，請檢查部署網址或權限。");
+            } finally {
+                document.getElementById('loader').style.display = 'none';
+            }
+        }
+
+        function showContent(data) {
+            document.getElementById('login-container').style.display = 'none';
+            const container = document.getElementById('main-content');
+            container.style.display = 'flex';
+            
             container.innerHTML = '';
-
-            data.forEach(i => {
-                // 生成 QR Code (WIFI:S:帳號;T:WPA;P:密碼;;)
-                const qrUrl = `https://chart.googleapis.com/chart?cht=qr&chs=150x150&chl=WIFI:S:${i.s};T:WPA;P:${i.p};;`;
-
+            data.forEach(item => {
+                // 自動生成 QR Code (WIFI 格式)
+                const qrUrl = `https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl=WIFI:S:${item.s};T:WPA;P:${item.p};;`;
+                
                 const card = document.createElement('div');
                 card.className = 'wifi-card';
                 card.innerHTML = `
-                    <h2>${i.c}</h2>
-                    <p style="font-size: 0.9em; color: #ccc;">SSID: ${i.s}</p>
-                    <img src="${qrUrl}" alt="QR Code" class="qr-code">
-                    <button class="copy-btn" onclick="copyToClipboard('${i.p}')">📋 複製密碼</button>
+                    <div class="classroom-name">${item.c}</div>
+                    <div style="font-size: 0.8em; color: #888;">SSID: ${item.s}</div>
+                    <img src="${qrUrl}" class="qr-code" alt="QR Code">
+                    <button class="copy-button" onclick="copyPassword('${item.p}')">複製密碼</button>
                 `;
                 container.appendChild(card);
             });
         }
 
-        function copyToClipboard(text) {
-            // 自動移除空白 (保留你原本貼心的功能)
-            const cleanText = text.replace(/\s/g, '');
-            navigator.clipboard.writeText(cleanText).then(() => {
-                alert("密碼已複製！");
+        function copyPassword(rawPassword) {
+            // 保留你貼心的「移除空白」功能
+            const cleanPassword = rawPassword.replace(/\s/g, '');
+            navigator.clipboard.writeText(cleanPassword).then(() => {
+                alert("密碼已複製到剪貼簿 (已自動移除空格)");
             });
         }
     </script>
